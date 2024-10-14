@@ -1,0 +1,13 @@
+# editors
+*.swp
+*~
+
+# build
+/build*/
+.vscode/
+data/
+
+# Python
+__pycache__/
+*.pyc
+dist/

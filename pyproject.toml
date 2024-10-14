@@ -1,0 +1,42 @@
+[project]
+name = "fricsense"
+version = "2024.10.10"
+authors = [
+  { name="Anthony Wertz", email="awertz@pm.me" },
+]
+description = "Python interface for the FricSense sensor."
+readme = "readme.md"
+license = {file = "license.md"}
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "crc",
+  "numpy",
+  "pandas",
+  "pyserial",
+  "numba",
+]
+
+[project.optional-dependencies]
+nb = [
+  "matplotlib",
+  "sounddevice",
+  "scipy",
+  "hexdump",
+]
+
+[project.urls]
+Homepage = "https://github.com/fricsense/fricsense-python"
+Issues = "https://github.com/fricsense/fricsense-python/issues"
+
+[project.scripts]
+fricsense-read = "fricsense.read_serial:app"
+fricsense-process = "fricsense.data_processor:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
