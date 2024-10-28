@@ -2,8 +2,10 @@ import serial
 import time
 import datetime as dt
 import traceback
+import numpy as np
 
 from . import find_fricsense
+from .command import make_command
 
 
 def size2str(size):
@@ -43,8 +45,9 @@ def read_serial(
     print(f"Opeining output file {output_fn}...")
     f = open(output_fn, "wb")
 
-    # Send initialization command
-    # ser.write(b"init_command")
+    # Ensure the TED device is off.
+    cmd = make_command(1, np.float32(0.0).tobytes())
+    ser.write(cmd)
 
     # Initialize variables
     start_time = time.time()
