@@ -6,22 +6,50 @@ import traceback
 from . import find_fricsense
 
 
+def size2str(size):
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1024 * 1024:
+        return f"{size / 1024:.2f} KB"
+    elif size < 1024 * 1024 * 1024:
+        return f"{size / 1024 / 1024:.2f} MB"
+    else:
+        return f"{size / 1024 / 1024 / 1024:.2f} GB"
+
+
 # Connect to serial port, send init command, then read data continuously and report throughput every second.
-
-
-def read_serial(port: str, output_fn: str = None, buffer_size: int = 100 * 1024 * 1024):
-    buffer = bytearray(buffer_size)
+def read_serial(
+    port: str,
+    output_fn: str = None,
+    postfix: str = None,
+    buffer_size: int = 1024 * 1024,
+):
+    buffers = [
+        bytearray(buffer_size),
+        bytearray(buffer_size),
+    ]
+    which = 0
     buffer_i = 0
 
     # Connect to the serial port. Baud rate doesn't matter since it's actually USB.
     ser = serial.Serial(port, 9600)
 
+    # Open the output file.
+    if output_fn is None:
+        output_fn = f"fricsense_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    if postfix is not None:
+        output_fn += f"_{postfix}"
+    output_fn += ".bin"
+    print(f"Opeining output file {output_fn}...")
+    f = open(output_fn, "wb")
+
     # Send initialization command
-    ser.write(b"init_command")
+    # ser.write(b"init_command")
 
     # Initialize variables
     start_time = time.time()
     total_bytes = 0
+    iter_bytes = 0
 
     # Continuously read data and calculate throughput
     try:
@@ -33,26 +61,34 @@ def read_serial(port: str, output_fn: str = None, buffer_size: int = 100 * 1024 
             num_bytes = len(data)
 
             # Store in the buffer.
-            buffer[buffer_i : buffer_i + num_bytes] = data
+            buffers[which][buffer_i : buffer_i + num_bytes] = data
             buffer_i += num_bytes
 
             # Update the total number of bytes
             total_bytes += num_bytes
+            iter_bytes += num_bytes
 
             # Calculate the elapsed time
             elapsed_time = time.time() - start_time
 
-            # Check if one second has passed
-            if elapsed_time >= 2:
+            # Check if one second has passed. We will print the throughput and dump data to disk.
+            if elapsed_time >= 3:
                 # Calculate the throughput in bytes per second
-                throughput = total_bytes / elapsed_time / 1024.0
+                throughput = iter_bytes / elapsed_time / 1024.0
 
-                # Print the throughput
-                print(f"Throughput: {throughput:.2f} KB/s")
+                # Print the throughput and write the buffer to the file.
+                print(
+                    f"Throughput: {throughput:.2f} KB/s (Writing {size2str(buffer_i)} to file)"
+                )
+                f.write(buffers[which][:buffer_i])
+
+                # Switch the buffer.
+                which = (which + 1) % 2
+                buffer_i = 0
 
                 # Reset the variables
                 start_time = time.time()
-                total_bytes = 0
+                iter_bytes = 0
 
     except KeyboardInterrupt:
         print(f"Keyboard interrupt.")
@@ -67,21 +103,14 @@ def read_serial(port: str, output_fn: str = None, buffer_size: int = 100 * 1024 
     print("Closing serial port.")
     ser.close()
 
-    def size2str(size):
-        if size < 1024:
-            return f"{size} B"
-        elif size < 1024 * 1024:
-            return f"{size / 1024:.2f} KB"
-        elif size < 1024 * 1024 * 1024:
-            return f"{size / 1024 / 1024:.2f} MB"
-        else:
-            return f"{size / 1024 / 1024 / 1024:.2f} GB"
+    # Write anything remaining in the buffer.
+    print(f"  -> Writing final {size2str(buffer_i)} to file...")
+    f.write(buffers[which][:buffer_i])
+    print(f"Total bytes written: {size2str(total_bytes)}")
 
-    if output_fn is None:
-        output_fn = f"fricsense_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.bin"
-    print(f"Writing buffer ({size2str(buffer_i)}) to file {output_fn}.")
-    with open(output_fn, "wb") as f:
-        f.write(buffer[:buffer_i])
+    # Close the file.
+    print("Closing output file.")
+    f.close()
 
     print("Done.")
 
@@ -107,11 +136,17 @@ def app():
         help="Output file name. Leave empty to auto-generate.",
     )
     parser.add_argument(
+        "--postfix",
+        type=str,
+        default=None,
+        help="Postfix to append to the output file name after date/time.",
+    )
+    parser.add_argument(
         "-b",
         "--buffer-size",
         type=int,
-        default=100 * 1024 * 1024,
-        help="Size of the buffer (bytes) to store data. It should be large enough to store all data from a single session.",
+        default=1024 * 1024,
+        help="Size of the double buffer (bytes) to store data. Default is 1 MB.",
     )
     args = parser.parse_args()
 
@@ -129,4 +164,4 @@ def app():
     else:
         print(f"Connecting to {port}.")
 
-    read_serial(port, args.output, args.buffer_size)
+    read_serial(port, args.output, args.postfix, args.buffer_size)
